@@ -1,4 +1,4 @@
-﻿aiohappyeyeballs==2.6.1
+aiohappyeyeballs==2.6.1
 aiohttp==3.13.5
 aiosignal==1.4.0
 annotated-doc==0.0.4
@@ -94,6 +94,4 @@ Werkzeug==3.1.8
 xxhash==3.7.0
 yarl==1.23.0
 zstandard==0.25.0
-
-sentence-transformers
 gunicorn
