@@ -10,14 +10,11 @@ import os
 app = Flask(__name__)
 CORS(app)
 
-# --- CONFIGURAÇÃO ---
+# Como a sua API_KEY agora está configurada no painel do Render,
+# não precisamos mais colocar ela em texto aqui no código!
 
-# --------------------
-
-# Variáveis globais para armazenar nossa memória e a IA
 banco_de_leis = None
 cerebro_ia = None
-
 
 def setup_ia():
     global banco_de_leis, cerebro_ia
@@ -32,63 +29,56 @@ def setup_ia():
 
         print("3. Criando banco de memória local...")
         embeddings = HuggingFaceEmbeddings(model_name="sentence-transformers/all-MiniLM-L6-v2")
-        # Aqui salvamos o PDF fatiado no banco FAISS
         banco_de_leis = FAISS.from_documents(split_docs, embeddings)
 
-        print("4. Conectando ao cérebro do Groq (Llama 3)...")
+        print("4. Conectando ao cérebro do Groq (Llama 3.1)...")
         cerebro_ia = ChatGroq(model_name="llama-3.1-8b-instant", temperature=0)
 
-        print("🚀 IA PRONTA! O servidor Python está rodando na porta 5000.")
-
+        print("🚀 IA PRONTA!")
+        
     except Exception as e:
         print(f"❌ Erro no setup: {e}")
 
+# ===== MUDANÇA CRUCIAL =====
+# Chamamos a função solta aqui. Assim, quando o Render (Gunicorn) ler
+# o arquivo, ele é obrigado a carregar a IA antes de abrir o site.
+setup_ia()
+# ===========================
 
 @app.route('/perguntar', methods=['POST'])
 def perguntar():
     if not banco_de_leis or not cerebro_ia:
         return jsonify({"resposta": "Aguarde, a IA ainda está carregando..."}), 503
-
+    
     data = request.json
     relato = data.get('relato', '')
-
+    
     try:
-        # PASSO A: Busca manual no PDF
-        # Procuramos os 4 trechos da lei mais parecidos com o relato do usuário
         resultados_busca = banco_de_leis.similarity_search(relato, k=4)
-
-        # Juntamos os trechos encontrados em um único texto
         contexto_da_lei = "\n\n".join([doc.page_content for doc in resultados_busca])
-
-        # PASSO B: Montamos a instrução (Prompt) "na mão"
-        # PASSO B: Montamos a instrução (Prompt) "na mão"
+        
         prompt_manual = f"""Você é um assistente jurídico focado na CLT brasileira.
-                Analise o relato do trabalhador com base APENAS nos trechos da lei abaixo.
+        Analise o relato do trabalhador com base APENAS nos trechos da lei abaixo.
+        
+        REGRAS DE FORMATAÇÃO:
+        1. Seja o mais curto, direto e resumido possível. Sem enrolação.
+        2. Liste os artigos da CLT correspondentes em formato de lista (usando o caractere * para fazer a bolinha).
+        3. Adicione um aviso final curto para procurar um advogado.
 
-                REGRAS DE FORMATAÇÃO:
-                1. Seja o mais curto, direto e resumido possível. Sem enrolação.
-                2. Liste os artigos da CLT correspondentes em formato de lista (usando o caractere * para fazer a bolinha).
-                3. Adicione um aviso final curto para procurar um advogado.
+        TRECHOS DA LEI ENCONTRADOS:
+        {contexto_da_lei}
 
-                TRECHOS DA LEI ENCONTRADOS:
-                {contexto_da_lei}
+        RELATO DO TRABALHADOR:
+        {relato}
 
-                RELATO DO TRABALHADOR:
-                {relato}
-
-                Análise:"""
-
-        # PASSO C: Enviamos o texto gigante para o Groq ler e responder
+        Análise:"""
+        
         resposta_ia = cerebro_ia.invoke(prompt_manual)
-
-        # O Groq devolve um objeto, pegamos apenas o conteúdo (.content)
         return jsonify({"resposta": resposta_ia.content})
-
+        
     except Exception as e:
         print(f"Erro: {e}")
         return jsonify({"resposta": "Erro ao processar sua pergunta."}), 500
 
-
 if __name__ == '__main__':
-    setup_ia()
     app.run(port=5000, debug=False)
