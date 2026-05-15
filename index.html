@@ -1,0 +1,128 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Consultor CLT</title>
+    <link rel="shortcut icon" href="icon.jpg" type="image/x-icon">
+    <style>
+        :root {
+            --bg-color: #131314;
+            --text-color: #e3e3e3;
+            --input-bg: #1e1f20;
+            --accent: #4285f4;
+        }
+
+        body, html {
+            margin: 0; padding: 0;
+            height: 100%;
+            background-color: var(--bg-color);
+            color: var(--text-color);
+            font-family: 'Segoe UI', Roboto, sans-serif;
+            display: flex; flex-direction: column;
+            align-items: center; justify-content: center;
+            overflow: hidden;
+        }
+
+        /* Container de conversa (escondido inicialmente) */
+        #chat-container {
+            width: 100%; max-width: 800px;
+            height: 70vh;
+            overflow-y: auto;
+            display: none; /* Só aparece após o envio */
+            padding: 20px;
+            margin-bottom: 100px;
+        }
+
+        /* Barra de entrada centralizada */
+        .input-wrapper {
+            position: absolute;
+            top: 50%; left: 50%;
+            transform: translate(-50%, -50%);
+            width: 90%; max-width: 700px;
+            transition: all 0.6s cubic-bezier(0.25, 1, 0.5, 1);
+        }
+
+        /* Animação para mover para baixo */
+        .input-wrapper.active {
+            top: 90%;
+        }
+
+        .search-area {
+            background: var(--input-bg);
+            border-radius: 30px;
+            padding: 15px 25px;
+            display: flex;
+            align-items: center;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.3);
+        }
+
+        input {
+            background: transparent;
+            border: none;
+            color: white;
+            flex: 1;
+            font-size: 18px;
+            outline: none;
+        }
+
+        button {
+            background: none; border: none;
+            color: var(--accent);
+            cursor: pointer; font-weight: bold;
+        }
+
+        .msg { margin: 20px 0; line-height: 1.6; }
+        .user { color: #8ab4f8; font-weight: bold; }
+        .ai { background: #28292a; padding: 15px; border-radius: 15px; }
+
+        h1 { font-weight: 400; font-size: 2rem; margin-bottom: 20px; transition: opacity 0.3s; }
+    </style>
+</head>
+<body>
+
+    <h1 id="title">Como posso ajudar com a CLT hoje?</h1>
+
+    <div id="chat-container"></div>
+
+    <div class="input-wrapper" id="inputBox">
+        <div class="search-area">
+            <input type="text" id="entrada" placeholder="Explique sua situação trabalhista..." onkeypress="if(event.key === 'Enter') enviar()">
+            <button onclick="enviar()">➤</button>
+        </div>
+    </div>
+
+    <script>
+        async function enviar() {
+            const input = document.getElementById('entrada');
+            const chat = document.getElementById('chat-container');
+            const wrapper = document.getElementById('inputBox');
+            const title = document.getElementById('title');
+            const texto = input.value;
+
+            if(!texto) return;
+
+            // Ativa animações e visual
+            title.style.opacity = '0';
+            wrapper.classList.add('active');
+            chat.style.display = 'block';
+
+            chat.innerHTML += `<div class="msg"><span class="user">Você</span><br>${texto}</div>`;
+            input.value = '';
+
+            try {
+                const res = await fetch('http://localhost:5000/perguntar', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({ relato: texto })
+                });
+                const data = await res.json();
+                chat.innerHTML += `<div class="msg ai"><strong>Consultor CLT:</strong><br>${data.resposta}</div>`;
+                chat.scrollTop = chat.scrollHeight;
+            } catch (err) {
+                chat.innerHTML += `<p>Erro ao conectar com o servidor.</p>`;
+            }
+        }
+    </script>
+</body>
+</html>
