@@ -10,9 +10,7 @@ import os
 app = Flask(__name__)
 CORS(app)
 
-# Como a sua API_KEY agora está configurada no painel do Render,
-# não precisamos mais colocar ela em texto aqui no código!
-
+# Variáveis globais para armazenar nossa memória e a IA
 banco_de_leis = None
 cerebro_ia = None
 
@@ -39,11 +37,8 @@ def setup_ia():
     except Exception as e:
         print(f"❌ Erro no setup: {e}")
 
-# ===== MUDANÇA CRUCIAL =====
-# Chamamos a função solta aqui. Assim, quando o Render (Gunicorn) ler
-# o arquivo, ele é obrigado a carregar a IA antes de abrir o site.
+# FORÇAMOS A IA A LIGAR JUNTO COM O SERVIDOR NA NUVEM
 setup_ia()
-# ===========================
 
 @app.route('/perguntar', methods=['POST'])
 def perguntar():
@@ -62,7 +57,7 @@ def perguntar():
         
         REGRAS DE FORMATAÇÃO:
         1. Seja o mais curto, direto e resumido possível. Sem enrolação.
-        2. Liste os artigos da CLT correspondentes em formato de lista (usando o caractere * para fazer a bolinha).
+        2. Liste os artigos da CLT correspondentes em formato de lista (usando o símbolo • antes de cada artigo).
         3. Adicione um aviso final curto para procurar um advogado.
 
         TRECHOS DA LEI ENCONTRADOS:
