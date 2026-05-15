@@ -2,15 +2,13 @@ from flask import Flask, request, jsonify
 from flask_cors import CORS
 from langchain_community.document_loaders import PyPDFLoader
 from langchain_text_splitters import RecursiveCharacterTextSplitter
-from langchain_huggingface import HuggingFaceEmbeddings
-from langchain_community.vectorstores import FAISS
+from langchain_community.retrievers import BM25Retriever
 from langchain_groq import ChatGroq
 import os
 
 app = Flask(__name__)
 CORS(app)
 
-# Variáveis globais para armazenar nossa memória e a IA
 banco_de_leis = None
 cerebro_ia = None
 
@@ -25,9 +23,10 @@ def setup_ia():
         splitter = RecursiveCharacterTextSplitter(chunk_size=1000, chunk_overlap=200)
         split_docs = splitter.split_documents(docs)
 
-        print("3. Criando banco de memória local...")
-        embeddings = HuggingFaceEmbeddings(model_name="sentence-transformers/all-MiniLM-L6-v2")
-        banco_de_leis = FAISS.from_documents(split_docs, embeddings)
+        print("3. Criando banco de memória LEVE (BM25)...")
+        # Substituímos a IA pesada por um buscador de texto ultraleve!
+        banco_de_leis = BM25Retriever.from_documents(split_docs)
+        banco_de_leis.k = 4 # Pega os 4 melhores trechos
 
         print("4. Conectando ao cérebro do Groq (Llama 3.1)...")
         cerebro_ia = ChatGroq(model_name="llama-3.1-8b-instant", temperature=0)
@@ -37,7 +36,7 @@ def setup_ia():
     except Exception as e:
         print(f"❌ Erro no setup: {e}")
 
-# FORÇAMOS A IA A LIGAR JUNTO COM O SERVIDOR NA NUVEM
+# Liga a IA junto com a nuvem
 setup_ia()
 
 @app.route('/perguntar', methods=['POST'])
@@ -49,7 +48,8 @@ def perguntar():
     relato = data.get('relato', '')
     
     try:
-        resultados_busca = banco_de_leis.similarity_search(relato, k=4)
+        # Busca manual leve
+        resultados_busca = banco_de_leis.invoke(relato)
         contexto_da_lei = "\n\n".join([doc.page_content for doc in resultados_busca])
         
         prompt_manual = f"""Você é um assistente jurídico focado na CLT brasileira.
