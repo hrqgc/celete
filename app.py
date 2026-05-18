@@ -15,30 +15,20 @@ cerebro_ia = None
 def setup_ia():
     global banco_de_leis, cerebro_ia
     try:
-        print("1. Lendo o PDF da CLT...")
         loader = PyPDFLoader("clt.pdf")
         docs = loader.load()
-
-        print("2. Fatiando as leis...")
         splitter = RecursiveCharacterTextSplitter(chunk_size=1000, chunk_overlap=200)
         split_docs = splitter.split_documents(docs)
-
-        print("3. Criando banco de memória LEVE (BM25)...")
+        
         banco_de_leis = BM25Retriever.from_documents(split_docs)
         banco_de_leis.k = 4
-
-        print("4. Conectando ao cérebro do Groq (Llama 3.1)...")
-        cerebro_ia = ChatGroq(model_name="llama-3.1-8b-instant", temperature=0)
-
-        print("🚀 IA PRONTA!")
-        return True
         
+        cerebro_ia = ChatGroq(model_name="llama-3.1-8b-instant", temperature=0)
+        return True
     except Exception as e:
-        print(f"❌ Erro no setup: {e}")
+        print(f"Erro no setup: {e}")
         return False
 
-# ===== A MÁGICA ACONTECE AQUI =====
-# Agora o Python é quem entrega a sua página do site!
 @app.route('/', methods=['GET'])
 def home():
     html_do_site = """
@@ -60,6 +50,7 @@ def home():
             .msg { margin: 20px 0; line-height: 1.6; }
             .user { color: #8ab4f8; font-weight: bold; }
             .ai { background: #28292a; padding: 15px; border-radius: 15px; }
+            .loading { color: #aaa; font-style: italic; }
             h1 { font-weight: 400; font-size: 2rem; margin-bottom: 20px; transition: opacity 0.3s; }
         </style>
     </head>
@@ -88,17 +79,25 @@ def home():
                 chat.innerHTML += `<div class="msg"><span class="user">Você</span><br>${texto}</div>`;
                 input.value = '';
 
+                // ADICIONA O LOADING
+                const loadingId = 'load-' + Date.now();
+                chat.innerHTML += `<div id="${loadingId}" class="msg ai loading">Consultor CLT está analisando a lei... ⏳</div>`;
+                chat.scrollTop = chat.scrollHeight;
+
                 try {
-                    // Agora o fetch aponta direto para a própria raiz do site
                     const res = await fetch('/perguntar', {
                         method: 'POST',
                         headers: {'Content-Type': 'application/json'},
                         body: JSON.stringify({ relato: texto })
                     });
                     const data = await res.json();
-                    chat.innerHTML += `<div class="msg ai"><strong>Consultor CLT:</strong><br>${data.resposta}</div>`;
+                    
+                    // REMOVE O LOADING E PÕE A RESPOSTA
+                    document.getElementById(loadingId).remove();
+                    chat.innerHTML += `<div class="msg ai"><strong>Consultor CLT:</strong><br>${data.resposta.replace(/\\n/g, '<br>')}</div>`;
                     chat.scrollTop = chat.scrollHeight;
                 } catch (err) {
+                    document.getElementById(loadingId).remove();
                     chat.innerHTML += `<p>Erro ao conectar com o servidor.</p>`;
                 }
             }
@@ -107,17 +106,14 @@ def home():
     </html>
     """
     return html_do_site
-# ==================================
 
 @app.route('/perguntar', methods=['POST'])
 def perguntar():
     global banco_de_leis, cerebro_ia
     
-    # Se a IA ainda não existir, ele liga ela agora!
     if banco_de_leis is None or cerebro_ia is None:
-        sucesso = setup_ia()
-        if not sucesso:
-            return jsonify({"resposta": "Erro interno: Não foi possível carregar a Lei."}), 500
+        if not setup_ia():
+            return jsonify({"resposta": "Erro: Não foi possível carregar a Lei."}), 500
 
     data = request.json
     relato = data.get('relato', '')
@@ -126,27 +122,22 @@ def perguntar():
         resultados_busca = banco_de_leis.invoke(relato)
         contexto_da_lei = "\n\n".join([doc.page_content for doc in resultados_busca])
         
-        prompt_manual = f"""Você é um assistente jurídico focado na CLT brasileira.
-        Analise o relato do trabalhador com base APENAS nos trechos da lei abaixo.
-        
-        REGRAS DE FORMATAÇÃO:
-        1. Seja o mais curto, direto e resumido possível. Sem enrolação.
-        2. Liste os artigos da CLT correspondentes em formato de lista (usando o símbolo • antes de cada artigo).
-        3. Adicione um aviso final curto para procurar um advogado.
+        # PROMPT NOVO E DIRETO
+        prompt_manual = f"""Você é um assistente jurídico. Analise o relato com base na lei abaixo.
+        REGRAS:
+        1. Seja extremamente curto e direto. Nada de enrolação.
+        2. Liste os artigos obrigatóriamente neste formato:
+        ○ Art [número]: [resumo]
+        3. Fale para a pessoa procurar um advogado no final.
 
-        TRECHOS DA LEI ENCONTRADOS:
-        {contexto_da_lei}
-
-        RELATO DO TRABALHADOR:
-        {relato}
-
-        Análise:"""
+        LEI: {contexto_da_lei}
+        RELATO: {relato}
+        """
         
         resposta_ia = cerebro_ia.invoke(prompt_manual)
         return jsonify({"resposta": resposta_ia.content})
         
     except Exception as e:
-        print(f"Erro: {e}")
         return jsonify({"resposta": "Erro ao processar sua pergunta."}), 500
 
 if __name__ == '__main__':
