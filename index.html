@@ -111,7 +111,7 @@
             input.value = '';
 
             try {
-                const res = await fetch('http://localhost:5000/perguntar', {
+                const res = await fetch('https://celete2-0.onrender.com/perguntar', {
                     method: 'POST',
                     headers: {'Content-Type': 'application/json'},
                     body: JSON.stringify({ relato: texto })
