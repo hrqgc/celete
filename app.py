@@ -24,31 +24,33 @@ def setup_ia():
         split_docs = splitter.split_documents(docs)
 
         print("3. Criando banco de memória LEVE (BM25)...")
-        # Substituímos a IA pesada por um buscador de texto ultraleve!
         banco_de_leis = BM25Retriever.from_documents(split_docs)
-        banco_de_leis.k = 4 # Pega os 4 melhores trechos
+        banco_de_leis.k = 4
 
         print("4. Conectando ao cérebro do Groq (Llama 3.1)...")
         cerebro_ia = ChatGroq(model_name="llama-3.1-8b-instant", temperature=0)
 
         print("🚀 IA PRONTA!")
+        return True
         
     except Exception as e:
         print(f"❌ Erro no setup: {e}")
-
-# Liga a IA junto com a nuvem
-setup_ia()
+        return False
 
 @app.route('/perguntar', methods=['POST'])
 def perguntar():
-    if not banco_de_leis or not cerebro_ia:
-        return jsonify({"resposta": "Aguarde, a IA ainda está carregando..."}), 503
+    global banco_de_leis, cerebro_ia
     
+    # TRUQUE MÁGICO: Se a IA ainda não existir, ele liga ela agora!
+    if banco_de_leis is None or cerebro_ia is None:
+        sucesso = setup_ia()
+        if not sucesso:
+            return jsonify({"resposta": "Erro interno: Não foi possível carregar a Lei."}), 500
+
     data = request.json
     relato = data.get('relato', '')
     
     try:
-        # Busca manual leve
         resultados_busca = banco_de_leis.invoke(relato)
         contexto_da_lei = "\n\n".join([doc.page_content for doc in resultados_busca])
         
